@@ -1,0 +1,119 @@
+FROM ubuntu:16.04
+
+RUN apt-get update && apt-get install sudo wget -y
+
+RUN sudo su && \
+	# ansible
+	echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu xenial main" >> /etc/apt/sources.list && \
+	# postgresql
+	echo "deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+	exit
+
+RUN	apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367 && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+
+# go
+
+RUN wget https://dl.google.com/go/go1.8.linux-amd64.tar.gz && \
+    tar -xvf go1.8.linux-amd64.tar.gz && \
+    mv go /usr/local && \
+    rm go1.8.linux-amd64.tar.gz 
+
+RUN export GOROOT=/usr/local/go && \
+    export GOPATH=$HOME && \
+    export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+
+# gcc for cgo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		g++ \
+		gcc \
+		libc6-dev \
+		make \
+		pkg-config \
+		wget \
+		ca-certificates \
+		openssh-server \
+		software-properties-common \
+		ansible \
+		git \
+        unzip \
+	&& rm -rf /var/lib/apt/lists/*
+
+# ssh 
+
+RUN mkdir /var/run/sshd
+
+RUN echo 'root:root' |chpasswd
+
+RUN sed -ri 's/^#?PermitRootLogin\s+.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+RUN sed -ri 's/UsePAM yes/#UsePAM yes/g' /etc/ssh/sshd_config
+
+RUN mkdir /root/.ssh
+
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# app
+
+RUN mkdir -p $GOPATH/src/git.1331.ru/1331 && \
+	cd $GOPATH/src/git.1331.ru/1331
+
+RUN touch ~/.ssh/known_hosts && \
+	ssh-keyscan github.com > ~/.ssh/known_hosts
+
+RUN	cd $GOPATH/src/git.1331.ru/1331 && \
+	git clone https://ed9c544f09e5cb1e416b269abc1ee75b85db27ff@github.com/1331taxi/ns.git taxi && \
+	cd taxi && \
+	git checkout hermes
+
+## ставим liquibase https://github.com/sharadvishe/liquibase
+
+RUN mkdir ~/liquibase && \
+    cd ~/liquibase && \
+	wget https://github.com/liquibase/liquibase/releases/download/liquibase-parent-3.4.2/liquibase-3.4.2-bin.zip && \
+	unzip liquibase-3.4.2-bin.zip && \
+	rm liquibase-3.4.2-bin.zip
+#
+# Redis Dockerfile
+#
+# https://github.com/dockerfile/redis
+#
+
+# Install Redis.
+RUN apt-get install -y software-properties-common && \
+	add-apt-repository -y ppa:chris-lea/redis-server && \
+	apt-get update && \
+	apt-get install --allow-unauthenticated -y --no-install-recommends redis-server
+
+## Postgresql 
+RUN \ 
+	#echo "deb http://apt.postgresql.org/pub/repos/apt/ xenail-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+	apt-get update && \
+	apt-get install -y \
+	postgresql-9.6 \
+	postgresql-9.6-postgis-2.3 
+
+#RUN /etc/init.d/postgresql start && \
+#	su -c psql postgres && \
+#    create role taxi; && \
+#    alter role taxi login superuser; && \
+#	alter role taxi with encrypted password 'taxi'; && \
+#	create database taxi owner taxi; && \
+	# 
+#	\c taxi && \
+#	create extension postgis; && \
+#	create extension pg_trgm; && \
+#	create extension btree_gist;
+
+## migration 
+#RUN cd $GOPATH/src/git.1331.ru/1331/taxi && \
+#	liquibase \
+#    --driver=org.postgresql.Driver \
+#    --url="jdbc:postgresql://127.0.0.1/taxi" \
+#    --username=taxi \
+#    --password=taxi \
+#    --classpath=db-migrations/postgresql-9.3-1102-jdbc4.jar \
+#    --changeLogFile=db-migrations/changelog-v1-cumulative.xml migrate
+
+EXPOSE 22 8080 6379 5672 15672
+
+CMD ["/usr/sbin/sshd", "-D"]

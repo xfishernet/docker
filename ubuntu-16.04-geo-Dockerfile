@@ -1,0 +1,60 @@
+FROM ubuntu:16.04
+
+RUN apt-get update && apt-get install sudo wget -y
+
+# go
+
+RUN wget https://dl.google.com/go/go1.8.linux-amd64.tar.gz && \
+    tar -xvf go1.8.linux-amd64.tar.gz && \
+    mv go /usr/local && \
+    rm go1.8.linux-amd64.tar.gz 
+
+RUN export GOROOT=/usr/local/go && \
+    export GOPATH=$HOME && \
+    export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+
+# gcc for cgo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		g++ \
+		gcc \
+		libc6-dev \
+		make \
+		pkg-config \
+		wget \
+		ca-certificates \
+		openssh-server \
+		software-properties-common \
+		ansible \
+		git \
+        unzip \
+	&& rm -rf /var/lib/apt/lists/*
+
+# ssh 
+
+RUN mkdir /var/run/sshd
+
+RUN echo 'root:root' |chpasswd
+
+RUN sed -ri 's/^#?PermitRootLogin\s+.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+RUN sed -ri 's/UsePAM yes/#UsePAM yes/g' /etc/ssh/sshd_config
+
+RUN mkdir /root/.ssh
+
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+#
+# Redis Dockerfile
+#
+# https://github.com/dockerfile/redis
+#
+
+# Install Redis.
+RUN apt-get install -y software-properties-common && \
+	add-apt-repository -y ppa:chris-lea/redis-server && \
+	apt-get update && \
+	apt-get install --allow-unauthenticated -y --no-install-recommends redis-server
+
+EXPOSE 22 8086 6379
+
+CMD ["/usr/sbin/sshd", "-D"]
